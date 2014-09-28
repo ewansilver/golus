@@ -126,8 +126,6 @@ func get(url string) chan []Entry_struct {
 	response_channel := make(chan []Entry_struct)
 	go get_http(response_channel, url)
 	return response_channel
-
-	panic("get() Not fully implemented.")
 }
 
 func renew(url string, lease int64) chan Register_response {
