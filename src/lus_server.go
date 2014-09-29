@@ -110,23 +110,18 @@ func lus(c chan request) {
 		case req := <-c:
 			switch req.q {
 			case "register": // Handles registration of new services
-				entry := req.entry
-				lease_duration := time.Duration(math.Min(float64(entry.Lease), max_lease))
-				expiry_time := time.Now().Add(lease_duration * time.Millisecond)
 				id := create_unique_id(counter)
-				entries[id] = entry_state{entry: req.entry, expiry: expiry_time}
-				req.response_channel <- response{id: id, lease: in_milliseconds(lease_duration * time.Millisecond)}
 				counter++
+				expiry_time, lease_duration := get_expiry_and_lease(req.entry,max_lease)
+				entries[id] = entry_state{entry: req.entry, expiry: expiry_time}
+				req.response_channel <- response{id: id, lease: lease_duration}
 			case "renew": // Allows clients to renew service leases
 				id := req.id
 				e, ok := entries[id]
 				if ok {
-					entry := req.entry
-					lease_duration := time.Duration(math.Min(float64(entry.Lease), max_lease))
-					expiry_time := time.Now().Add(lease_duration * time.Millisecond)
-
+					expiry_time, lease_duration := get_expiry_and_lease(req.entry,max_lease)
 					entries[id] = entry_state{entry: e.entry, expiry: expiry_time}
-					req.response_channel <- response{id: id, lease: in_milliseconds(lease_duration * time.Millisecond)}
+					req.response_channel <- response{id: id, lease: lease_duration}
 				} else {
 					req.response_channel <- response{} // Send an empty response to indicate nothing happened.
 				}
@@ -150,6 +145,14 @@ func lus(c chan request) {
 			entries = filterBy(remove_stale_entries_filter(), entries)
 		}
 	}
+}
+
+// Returns the new lease and the expiry time based on the requested_lease
+func get_expiry_and_lease(entry Entry_struct, max_lease float64) (time.Time, int64) {
+	requested_lease := float64(entry.Lease)
+	lease_duration := time.Duration(math.Min(requested_lease, max_lease))
+	expiry_time := time.Now().Add(lease_duration * time.Millisecond)
+	return expiry_time, in_milliseconds(lease_duration * time.Millisecond)
 }
 
 // Find the Entry_structs that match the supplied templates
