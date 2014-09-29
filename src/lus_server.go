@@ -131,14 +131,7 @@ func lus(c chan request) {
 					req.response_channel <- response{} // Send an empty response to indicate nothing happened.
 				}
 			case "find": // Allows clients to find all the entries that match a particular set of keys.
-				e := entries
-				keys := req.entry.Keys
-				for k, v := range keys {
-					e = filterBy(matches_entry_filter(k, v), e)
-				}
-				r := response{matches: convert_to_entry_structs(e)}
-				req.response_channel <- r
-
+				req.response_channel <- response{matches: find_matching_entries(req.entry.Keys, entries)}
 			case "get_id": // Allows a client to find the specific entry.
 				id := req.id
 				e, ok := entries[id]
@@ -157,6 +150,14 @@ func lus(c chan request) {
 			entries = filterBy(remove_stale_entries_filter(), entries)
 		}
 	}
+}
+
+// Find the Entry_structs that match the supplied templates
+func find_matching_entries(templates map[string]string, entries map[string]entry_state) []Entry_struct {
+	for k, v := range templates {
+		entries = filterBy(matches_entry_filter(k, v), entries)
+		}
+		return convert_to_entry_structs(entries)
 }
 
 // Helper func that allows us to hack in a unique ID for every entry. Obviously this is deterministic but it is my first Go app so give me a break!
