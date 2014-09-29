@@ -53,8 +53,7 @@ func get(url string) chan []Entry_struct {
 
 // Client interface to Renew with the LUS
 func (client client_state) Renew(url string, lease int64) Register_response {
-	channel := renew_chan(url, lease)
-	return <- channel
+	return <- renew_chan(url, lease)
 }
 
 func renew_chan(url string, lease int64) chan Register_response {
@@ -66,8 +65,7 @@ func renew_chan(url string, lease int64) chan Register_response {
 
 // Client interface to Register with the LUS
 func (client client_state) Register(keys map[string]string, lease int64, data string) Register_response {
-	channel := register_chan(keys,lease,data,client.registration_url)
-	return <- channel
+	return <- register_chan(keys,lease,data,client.registration_url)
 }
 
 func register_chan(keys map[string]string, lease int64, data string, url string) chan Register_response {
@@ -79,8 +77,7 @@ func register_chan(keys map[string]string, lease int64, data string, url string)
 
 // Client interface to Find matching templates
 func (client client_state) Find(keys map[string]string) []Entry_struct {
-	channel := find_chan(keys,client.find_url)
-	return <- channel
+	return <- find_chan(keys,client.find_url)
 }
 
 func find_chan(keys map[string]string, url string) chan []Entry_struct {
@@ -116,9 +113,7 @@ func find_http(e Entry_struct, response_channel chan []Entry_struct, url string)
 // Makes the hateoas call to the root url to get the list of other urls that will drive the application
 // Returns registration_url, find_url
 func get_hateoas(root_url string) (string,  string) {
-	response_channel := make(chan []LinkRelation)
-	go hateoas_http(response_channel, root_url)
-	lr := <- response_channel
+	lr := get_link_relations(get_to_server(root_url))
 
 // We are assuming that we only get two LinkRelations here. Dangerous!!!!
 	if lr[0].Rel == "http://rels.ewansilver.com/v1/lus/register" {
@@ -130,11 +125,6 @@ func get_hateoas(root_url string) (string,  string) {
 			find_url := lr[0].Href
 			return registration_url, find_url
 			}
-}
-
-func hateoas_http(response_channel chan []LinkRelation, url string) {
-	body := get_to_server(url)
-	response_channel <- get_link_relations(body)
 }
 
 func get_link_relations(body []byte) []LinkRelation {
