@@ -1,5 +1,14 @@
 package lus
 
+/**
+The example below simply demo's a couple of  apps being deployed to different environments and then allowing clients to discover those apps. It
+also demo's lease time out and renewal.
+
+I haven't spent anytime looking at Go test harnesses yet as this is simply my first app and I wanted to see how it works.
+
+To use: make sure the lus_server is running on the localmachine and then type: go test lus
+**/
+
 import (
   "testing"
   "log"

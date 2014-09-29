@@ -4,13 +4,6 @@ package lus
   A dummy test client that just allows me to test the basic functionality of the LUS. Longer term this code needs to be extracted into
   some kind of LookupLocator (https://river.apache.org/doc/api/net/jini/core/discovery/LookupLocator.html) and corresponding LookupDiscoveryService
   (https://river.apache.org/doc/api/net/jini/discovery/LookupDiscoveryService.html)
-
-  The example below simply demo's a couple of  apps being deployed to different environments and then allowing clients to discover those apps. It
-  also demo's lease time out and renewal.
-
-  I haven't spent anytime looking at Go test harnesses yet as this is simply my first app and I wanted to see how it works.
-
-  To use: make sure the lus_server is running on the localmachine and then type: go run lus_client.go
 **/
 
 import (
