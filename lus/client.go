@@ -4,6 +4,7 @@ package lus
   A dummy test client that just allows me to test the basic functionality of the LUS. Longer term this code needs to be extracted into
   some kind of LookupLocator (https://river.apache.org/doc/api/net/jini/core/discovery/LookupLocator.html) and corresponding LookupDiscoveryService
   (https://river.apache.org/doc/api/net/jini/discovery/LookupDiscoveryService.html)
+
 **/
 
 import (

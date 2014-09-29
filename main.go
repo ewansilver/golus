@@ -22,7 +22,7 @@ then it will likely not get it.
 This approach to service discovery is essentially probabilistic in nature. It sits at odds with the current vogue in service discovery which is based
 around maintaing a strongly consistent view of the services on the network.
 
-To use, type: go run lus_server.go
+To use, type: go run main.go
 **/
 
 import (
@@ -35,13 +35,13 @@ import (
 // Main func to get the system up and running.
 // Lots of hardcoded params that could do with being moved out.
 func main() {
-
   port := 3000
-  var request_chan = make(chan lus.Request)
+  var max_lease float64 = 120000 // Arbitrarily set it to 2 minutes (miiliseconds)
+
   log.Println("LUS Server")
   log.Println("Running on http://localhost:", port)
+  request_chan := lus.Start(max_lease)
 
-  go lus.Lus(request_chan)
   http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { lus.Root_handler(port, w, r) })
   http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) { lus.Register(request_chan, port, w, r) })
   http.HandleFunc("/find", func(w http.ResponseWriter, r *http.Request) { lus.Find(request_chan, w, r) })

@@ -78,15 +78,21 @@ type Register_response struct {
 	Lease int64
 }
 
-// The core goroutine. Maintains the internal map of entries and orchestrates the various activities.
+// Start the Lus server
+func Start(max_lease float64) chan Request {
+	request_chan := make(chan Request)
+	go lus(request_chan, max_lease)
+	return request_chan
+}
+
+ // The core goroutine. Maintains the internal map of entries and orchestrates the various activities.
 // Kind of sucks that this has to be written within a for loop. Would much prefer to write it as a tail recursive call
 // and pass in all the params but it seems that Go is not optimised for tail recursion. WTF!!!
 // (eg see: https://groups.google.com/forum/#!msg/golang-nuts/0oIZPHhrDzY/2nCpUZDKZAAJ)
-func Lus(c chan Request) {
+func lus(c chan Request, max_lease float64) {
 	tick_chan := time.Tick(1 * time.Second)
 	entries := make(map[string]entry_state)
 	var counter int64 = 0
-	var max_lease float64 = 120000 // Arbitrarily set it to 2 minutes (miiliseconds)
 
 	for {
 		select {
