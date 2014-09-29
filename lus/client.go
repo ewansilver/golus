@@ -15,9 +15,34 @@ import (
 	"net/http"
 )
 
+type Client interface {
+	Register(keys map[string]string, lease int64, data string) Register_response
+	Renew(url string, lease int64) Register_response
+	Find(keys map[string]string) []Entry_struct
+}
+
+// Internal struct that holds the details of the LUS client
+type client_state struct {
+	registration_url string
+	find_url string
+}
+
 // Represents the JSON data struct that lets clients ask to extend a lease registration.
 type Renew_request struct {
 	Lease int64
+}
+
+// Initialises and returns a new Client.
+func NewClient(root_url string) *client_state {
+// Make a call to the HATEOAS URL to find out which URLS we use for the various services
+
+	registration_url, find_url := get_hateoas(root_url)
+
+	client := &client_state{
+		registration_url: registration_url,
+		find_url: find_url,
+	}
+	return client
 }
 
 func get(url string) chan []Entry_struct {
@@ -26,21 +51,39 @@ func get(url string) chan []Entry_struct {
 	return response_channel
 }
 
-func renew(url string, lease int64) chan Register_response {
+// Client interface to Renew with the LUS
+func (client client_state) Renew(url string, lease int64) Register_response {
+	channel := renew_chan(url, lease)
+	return <- channel
+}
+
+func renew_chan(url string, lease int64) chan Register_response {
 	response_channel := make(chan Register_response)
 	r := Renew_request{Lease: lease}
 	go renew_http(r, response_channel, url)
 	return response_channel
 }
 
-func register(keys map[string]string, lease int64, data string, url string) chan Register_response {
+// Client interface to Register with the LUS
+func (client client_state) Register(keys map[string]string, lease int64, data string) Register_response {
+	channel := register_chan(keys,lease,data,client.registration_url)
+	return <- channel
+}
+
+func register_chan(keys map[string]string, lease int64, data string, url string) chan Register_response {
 	response_channel := make(chan Register_response)
 	e := Entry_struct{Keys: keys, Lease: lease, Data: data}
 	go register_http(e, response_channel, url)
 	return response_channel
 }
 
-func find(keys map[string]string, url string) chan []Entry_struct {
+// Client interface to Find matching templates
+func (client client_state) Find(keys map[string]string) []Entry_struct {
+	channel := find_chan(keys,client.find_url)
+	return <- channel
+}
+
+func find_chan(keys map[string]string, url string) chan []Entry_struct {
 	response_channel := make(chan []Entry_struct)
 	e := Entry_struct{Keys: keys}
 	go find_http(e, response_channel, url)
@@ -70,6 +113,38 @@ func find_http(e Entry_struct, response_channel chan []Entry_struct, url string)
 	response_channel <- get_entries(body)
 }
 
+// Makes the hateoas call to the root url to get the list of other urls that will drive the application
+// Returns registration_url, find_url
+func get_hateoas(root_url string) (string,  string) {
+	response_channel := make(chan []LinkRelation)
+	go hateoas_http(response_channel, root_url)
+	lr := <- response_channel
+
+// We are assuming that we only get two LinkRelations here. Dangerous!!!!
+	if lr[0].Rel == "http://rels.ewansilver.com/v1/lus/register" {
+		registration_url := lr[0].Href
+		find_url := lr[1].Href
+		return registration_url, find_url
+		} else {
+			registration_url := lr[1].Href
+			find_url := lr[0].Href
+			return registration_url, find_url
+			}
+}
+
+func hateoas_http(response_channel chan []LinkRelation, url string) {
+	body := get_to_server(url)
+	response_channel <- get_link_relations(body)
+}
+
+func get_link_relations(body []byte) []LinkRelation {
+	relations := []LinkRelation{}
+	json.Unmarshal(body, &relations)
+	return relations
+}
+
+
+// Make a get to the URL and get a byte array of JSON back
 func get_to_server(url string) []byte {
 	req, err := http.NewRequest("GET", url, nil)
 	req.Header.Set("Content-Type", "application/json")

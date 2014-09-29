@@ -40,19 +40,19 @@ func TestMatcher(t *testing.T) {
   register_url := "http://localhost:3000/register"
   var lease int64 = 10000
 
-  a := <-find(map[string]string{"application": "poller"}, find_url)
+  a := <-find_chan(map[string]string{"application": "poller"}, find_url)
   assert_num_entries("a", a, 0)
 
-  b := <-register(map[string]string{"application": "poller", "environment": "prod", "id": "b"}, lease, "", register_url)
-  c := <-register(map[string]string{"application": "poller", "environment": "dev", "id": "c"}, lease, "", register_url)
+  b := <-register_chan(map[string]string{"application": "poller", "environment": "prod", "id": "b"}, lease, "", register_url)
+  c := <-register_chan(map[string]string{"application": "poller", "environment": "dev", "id": "c"}, lease, "", register_url)
 
-  d := <-find(map[string]string{"application": "poller"}, find_url)
+  d := <-find_chan(map[string]string{"application": "poller"}, find_url)
   assert_num_entries("d", d, 2)
 
-  e := <-find(map[string]string{"application": "poller", "environment": "prod"}, find_url)
+  e := <-find_chan(map[string]string{"application": "poller", "environment": "prod"}, find_url)
   assert_num_entries("e", e, 1)
 
-  f := <-find(map[string]string{"application": "poller", "environment": "dev"}, find_url)
+  f := <-find_chan(map[string]string{"application": "poller", "environment": "dev"}, find_url)
   assert_num_entries("f", f, 1)
 
   // Make sure that calling the specific entry URL gives you the appropriate Entry_struct back.
@@ -65,18 +65,18 @@ func TestMatcher(t *testing.T) {
 
   // Wait for 5 seconds, renew the dev poller, check that there are still 2 entries
   time.Sleep(5 * time.Second)
-  g := <-find(map[string]string{"application": "poller"}, find_url)
+  g := <-find_chan(map[string]string{"application": "poller"}, find_url)
   assert_num_entries("g", g, 2)
-  <-renew(c.Url, lease)
+  <-renew_chan(c.Url, lease)
 
   // Wait for 5 seconds and check that the prod poller has gone and that only the dev poller is still active
   time.Sleep(5 * time.Second)
-  h := <-find(map[string]string{"application": "poller"}, find_url)
+  h := <-find_chan(map[string]string{"application": "poller"}, find_url)
   assert_num_entries("h", h, 1)
 
   // Wait for 5 seconds and check that everything has timed out
   time.Sleep(5 * time.Second)
-  i := <-find(map[string]string{"application": "poller"}, find_url)
+  i := <-find_chan(map[string]string{"application": "poller"}, find_url)
   assert_num_entries("i", i, 0)
 
   // Check that GETing an expired entry fails.
@@ -85,7 +85,7 @@ func TestMatcher(t *testing.T) {
 
   // Check that the lease on an entry is capped.
 
-  j := <-register(map[string]string{"application": "some_other_app"}, 99999999999, "", register_url)
+  j := <-register_chan(map[string]string{"application": "some_other_app"}, 99999999999, "", register_url)
   if !(j.Lease == 120000) {
     panic("j_entry lease is not capped")
   }

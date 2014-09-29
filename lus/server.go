@@ -283,7 +283,7 @@ func Find(request_channel chan Request, w http.ResponseWriter, r *http.Request) 
 
 // An example of a HATEOAS webroot that will allow us to alter the exact URLS called for register etc in a later iteration.
 func Root_handler(port int, w http.ResponseWriter, r *http.Request) {
-	rels := []LinkRelation{LinkRelation{Href: "http://localhost:" + strconv.Itoa(port) + "/register", Rel: "http://rels.bankpossible.com/v1/lus/register"}, LinkRelation{Href: "http://localhost:" + strconv.Itoa(port) + "/entry", Rel: "http://rels.bankpossible.com/v1/lus/entry"}}
+	rels := []LinkRelation{LinkRelation{Href: "http://localhost:" + strconv.Itoa(port) + "/register", Rel: "http://rels.ewansilver.com/v1/lus/register"}, LinkRelation{Href: "http://localhost:" + strconv.Itoa(port) + "/find", Rel: "http://rels.ewansilver.com/v1/lus/find"}}
 	b, _ := json.Marshal(rels)
 	w.Write(b)
 }
