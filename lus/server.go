@@ -1,4 +1,4 @@
-package main
+package lus
 
 /** A web based LUS based loosely on the Jini LUS that was around back in prehistoric times i.e start of the millenium
 (See https://river.apache.org/doc/specs/html/lookup-spec.html or http://www.artima.com/jini/jiniology/lookup.html). It is a toy
@@ -58,7 +58,7 @@ type entry_state struct {
 
 // A shitty internal structure that is overloaded with multiple use cases but represents the various inbound requests and means
 // that I don't have to have multiple chans for each request type. Not sure what is most idiomatic here.
-type request struct {
+type Request struct {
 	q                string
 	response_channel chan response
 	entry            Entry_struct
@@ -78,28 +78,11 @@ type Register_response struct {
 	Lease int64
 }
 
-// Main func to get the system up and running.
-// Lots of hardcoded params that could do with being moved out.
-func main() {
-
-	port := 3000
-	var request_chan = make(chan request)
-	log.Println("LUS Server")
-	log.Println("Running on http://localhost:", port)
-
-	go lus(request_chan)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { root_handler(port, w, r) })
-	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) { register(request_chan, port, w, r) })
-	http.HandleFunc("/find", func(w http.ResponseWriter, r *http.Request) { find(request_chan, w, r) })
-	http.HandleFunc(entry_url(), func(w http.ResponseWriter, r *http.Request) { entry(request_chan, port, w, r) })
-	http.ListenAndServe(":"+strconv.Itoa(port), nil)
-}
-
 // The core goroutine. Maintains the internal map of entries and orchestrates the various activities.
 // Kind of sucks that this has to be written within a for loop. Would much prefer to write it as a tail recursive call
 // and pass in all the params but it seems that Go is not optimised for tail recursion. WTF!!!
 // (eg see: https://groups.google.com/forum/#!msg/golang-nuts/0oIZPHhrDzY/2nCpUZDKZAAJ)
-func lus(c chan request) {
+func Lus(c chan Request) {
 	tick_chan := time.Tick(1 * time.Second)
 	entries := make(map[string]entry_state)
 	var counter int64 = 0
@@ -238,36 +221,36 @@ func get_entry(b *http.Request) Entry_struct {
 }
 
 // The wrapper func that is called when clients want to register a new entry.
-func register(request_channel chan request, port int, w http.ResponseWriter, r *http.Request) {
+func Register(request_channel chan Request, port int, w http.ResponseWriter, r *http.Request) {
 	entry := get_entry(r)
 
 	response_chan := make(chan response)
-	request_struct := request{q: "register", response_channel: response_chan, entry: entry}
+	request_struct := Request{q: "register", response_channel: response_chan, entry: entry}
 	request_channel <- request_struct
 	response := <-response_chan
 
-	b, _ := json.Marshal(Register_response{Url: "http://localhost:" + strconv.Itoa(port) + entry_url() + response.id, Lease: response.lease})
+	b, _ := json.Marshal(Register_response{Url: "http://localhost:" + strconv.Itoa(port) + Entry_url() + response.id, Lease: response.lease})
 	w.Write(b)
 }
 
 // The wrapper func that is called when clients either want to update (via PUT) or examine (via GET) a specific entry
-func entry(request_channel chan request, port int, w http.ResponseWriter, r *http.Request) {
+func Entry(request_channel chan Request, port int, w http.ResponseWriter, r *http.Request) {
 	if r.Method == "PUT" {
 		path := r.URL.Path
 		id := path[7:len(path)]
 		entry := get_entry(r)
 		response_chan := make(chan response)
-		request_struct := request{q: "renew", response_channel: response_chan, entry: entry, id: id}
+		request_struct := Request{q: "renew", response_channel: response_chan, entry: entry, id: id}
 		request_channel <- request_struct
 		response := <-response_chan
-		b, _ := json.Marshal(Register_response{Url: "http://localhost:" + strconv.Itoa(port) + entry_url() + response.id, Lease: response.lease})
+		b, _ := json.Marshal(Register_response{Url: "http://localhost:" + strconv.Itoa(port) + Entry_url() + response.id, Lease: response.lease})
 		w.Write(b)
 	} else if r.Method == "GET" {
 		path := r.URL.Path
 		id := path[7:len(path)]
 
 		response_chan := make(chan response)
-		request_struct := request{q: "get_id", response_channel: response_chan, id: id}
+		request_struct := Request{q: "get_id", response_channel: response_chan, id: id}
 		request_channel <- request_struct
 		response := <-response_chan
 		matches := response.matches
@@ -280,11 +263,11 @@ func entry(request_channel chan request, port int, w http.ResponseWriter, r *htt
 }
 
 // Wrapper func that is called to allow clients to find all Entries that match the supplied Entry JSON.
-func find(request_channel chan request, w http.ResponseWriter, r *http.Request) {
+func Find(request_channel chan Request, w http.ResponseWriter, r *http.Request) {
 	entry := get_entry(r)
 
 	response_chan := make(chan response)
-	request_struct := request{q: "find", response_channel: response_chan, entry: entry}
+	request_struct := Request{q: "find", response_channel: response_chan, entry: entry}
 	request_channel <- request_struct
 	response := <-response_chan
 	matches := response.matches
@@ -293,13 +276,13 @@ func find(request_channel chan request, w http.ResponseWriter, r *http.Request) 
 }
 
 // An example of a HATEOAS webroot that will allow us to alter the exact URLS called for register etc in a later iteration.
-func root_handler(port int, w http.ResponseWriter, r *http.Request) {
+func Root_handler(port int, w http.ResponseWriter, r *http.Request) {
 	rels := []LinkRelation{LinkRelation{Href: "http://localhost:" + strconv.Itoa(port) + "/register", Rel: "http://rels.bankpossible.com/v1/lus/register"}, LinkRelation{Href: "http://localhost:" + strconv.Itoa(port) + "/entry", Rel: "http://rels.bankpossible.com/v1/lus/entry"}}
 	b, _ := json.Marshal(rels)
 	w.Write(b)
 }
 
 // Helper func to allow us to replace all the entry urls easily.
-func entry_url() string {
+func Entry_url() string {
 	return "/entry/"
 }
