@@ -19,10 +19,12 @@ type Client interface {
 	Register(keys map[string]string, lease int64, data string) Register_response
 	Renew(url string, lease int64) Register_response
 	Find(keys map[string]string) []Entry_struct
+	Root_URL() string
 }
 
 // Internal struct that holds the details of the LUS client
 type client_state struct {
+	root_url         string
 	registration_url string
 	find_url         string
 }
@@ -39,10 +41,16 @@ func NewClient(root_url string) *client_state {
 	registration_url, find_url := get_hateoas(root_url)
 
 	client := &client_state{
+		root_url:         root_url,
 		registration_url: registration_url,
 		find_url:         find_url,
 	}
 	return client
+}
+
+// Gets the root url that defines this client.
+func (c client_state) Root_URL() string {
+	return c.root_url
 }
 
 func get(url string) chan []Entry_struct {

@@ -14,6 +14,7 @@ func TestClient(t *testing.T) {
 	var lease int64 = 10000
 
 	client := NewClient(root_url())
+	assert_strings_match("http://localhost:3000/", client.Root_URL())
 
 	// First we need to make sure that the LUS is empty
 	a := client.Find(map[string]string{"application": "poller"})
@@ -58,4 +59,10 @@ func TestClient(t *testing.T) {
 	f := client.Find(map[string]string{"application": "poller"})
 	assert_num_entries("f", f, 0)
 
+}
+
+func assert_strings_match(a, b string) {
+	if !(a == b) {
+		panic("assert_strings_match do not match")
+	}
 }
