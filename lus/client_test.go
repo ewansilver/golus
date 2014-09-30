@@ -63,6 +63,21 @@ func TestClient(t *testing.T) {
 
 }
 
+// Test the leases are capped.
+func TestCappedLease(t *testing.T) {
+	client := NewClient(root_url())
+
+	// First we need to make sure that the LUS is empty
+	a := client.Find(map[string]string{"application": "poller"})
+	assert_num_entries("a", a, 0)
+	b := client.Register(map[string]string{"application": "poller", "environment": "prod", "id": "b"}, 99999999999, "")
+	client.Renew(b.Url, 0)
+	if !(b.Lease == 120000) {
+		panic("Lease was not capped.")
+	}
+
+}
+
 // Test that the auto renewal function works.
 func TestAutoRenewal(t *testing.T) {
 	var lease int64 = 1000
