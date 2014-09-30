@@ -85,7 +85,7 @@ func Start(max_lease float64) chan Request {
 	return request_chan
 }
 
- // The core goroutine. Maintains the internal map of entries and orchestrates the various activities.
+// The core goroutine. Maintains the internal map of entries and orchestrates the various activities.
 // Kind of sucks that this has to be written within a for loop. Would much prefer to write it as a tail recursive call
 // and pass in all the params but it seems that Go is not optimised for tail recursion. WTF!!!
 // (eg see: https://groups.google.com/forum/#!msg/golang-nuts/0oIZPHhrDzY/2nCpUZDKZAAJ)
@@ -101,14 +101,14 @@ func lus(c chan Request, max_lease float64) {
 			case "register": // Handles registration of new services
 				id := create_unique_id(counter)
 				counter++
-				expiry_time, lease_duration := get_expiry_and_lease(req.entry,max_lease)
+				expiry_time, lease_duration := get_expiry_and_lease(req.entry, max_lease)
 				entries[id] = entry_state{entry: req.entry, expiry: expiry_time}
 				req.response_channel <- response{id: id, lease: lease_duration}
 			case "renew": // Allows clients to renew service leases
 				id := req.id
 				e, ok := entries[id]
 				if ok {
-					expiry_time, lease_duration := get_expiry_and_lease(req.entry,max_lease)
+					expiry_time, lease_duration := get_expiry_and_lease(req.entry, max_lease)
 					entries[id] = entry_state{entry: e.entry, expiry: expiry_time}
 					req.response_channel <- response{id: id, lease: lease_duration}
 				} else {
@@ -148,8 +148,8 @@ func get_expiry_and_lease(entry Entry_struct, max_lease float64) (time.Time, int
 func find_matching_entries(templates map[string]string, entries map[string]entry_state) []Entry_struct {
 	for k, v := range templates {
 		entries = filterBy(matches_entry_state(k, v), entries)
-		}
-		return convert_to_entry_structs(entries)
+	}
+	return convert_to_entry_structs(entries)
 }
 
 // Helper func that allows us to hack in a unique ID for every entry. Obviously this is deterministic but it is my first Go app so give me a break!

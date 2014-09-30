@@ -24,7 +24,7 @@ type Client interface {
 // Internal struct that holds the details of the LUS client
 type client_state struct {
 	registration_url string
-	find_url string
+	find_url         string
 }
 
 // Represents the JSON data struct that lets clients ask to extend a lease registration.
@@ -34,13 +34,13 @@ type Renew_request struct {
 
 // Initialises and returns a new Client.
 func NewClient(root_url string) *client_state {
-// Make a call to the HATEOAS URL to find out which URLS we use for the various services
+	// Make a call to the HATEOAS URL to find out which URLS we use for the various services
 
 	registration_url, find_url := get_hateoas(root_url)
 
 	client := &client_state{
 		registration_url: registration_url,
-		find_url: find_url,
+		find_url:         find_url,
 	}
 	return client
 }
@@ -53,7 +53,7 @@ func get(url string) chan []Entry_struct {
 
 // Client interface to Renew with the LUS
 func (client client_state) Renew(url string, lease int64) Register_response {
-	return <- renew_chan(url, lease)
+	return <-renew_chan(url, lease)
 }
 
 func renew_chan(url string, lease int64) chan Register_response {
@@ -65,7 +65,7 @@ func renew_chan(url string, lease int64) chan Register_response {
 
 // Client interface to Register with the LUS
 func (client client_state) Register(keys map[string]string, lease int64, data string) Register_response {
-	return <- register_chan(keys,lease,data,client.registration_url)
+	return <-register_chan(keys, lease, data, client.registration_url)
 }
 
 func register_chan(keys map[string]string, lease int64, data string, url string) chan Register_response {
@@ -77,7 +77,7 @@ func register_chan(keys map[string]string, lease int64, data string, url string)
 
 // Client interface to Find matching templates
 func (client client_state) Find(keys map[string]string) []Entry_struct {
-	return <- find_chan(keys,client.find_url)
+	return <-find_chan(keys, client.find_url)
 }
 
 func find_chan(keys map[string]string, url string) chan []Entry_struct {
@@ -112,19 +112,19 @@ func find_http(e Entry_struct, response_channel chan []Entry_struct, url string)
 
 // Makes the hateoas call to the root url to get the list of other urls that will drive the application
 // Returns registration_url, find_url
-func get_hateoas(root_url string) (string,  string) {
+func get_hateoas(root_url string) (string, string) {
 	lr := get_link_relations(get_to_server(root_url))
 
-// We are assuming that we only get two LinkRelations here. Dangerous!!!!
+	// We are assuming that we only get two LinkRelations here. Dangerous!!!!
 	if lr[0].Rel == "http://rels.ewansilver.com/v1/lus/register" {
 		registration_url := lr[0].Href
 		find_url := lr[1].Href
 		return registration_url, find_url
-		} else {
-			registration_url := lr[1].Href
-			find_url := lr[0].Href
-			return registration_url, find_url
-			}
+	} else {
+		registration_url := lr[1].Href
+		find_url := lr[0].Href
+		return registration_url, find_url
+	}
 }
 
 func get_link_relations(body []byte) []LinkRelation {
@@ -132,7 +132,6 @@ func get_link_relations(body []byte) []LinkRelation {
 	json.Unmarshal(body, &relations)
 	return relations
 }
-
 
 // Make a get to the URL and get a byte array of JSON back
 func get_to_server(url string) []byte {
