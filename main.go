@@ -23,28 +23,45 @@ This approach to service discovery is essentially probabilistic in nature. It si
 around maintaing a strongly consistent view of the services on the network.
 
 To use, type: go run main.go
+
+Command line params:
+-p <PORT> : default 3000
+-m <MAX_LEASE_IN_MS> : default 120000 - two minutes
 **/
 
 import (
-  "log"
-  "net/http"
-  "golus/lus"
-  "strconv"
+	"flag"
+	"golus/lus"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+)
+
+var (
+	flagSet = flag.NewFlagSet("golus", flag.ExitOnError)
+
+	portFlag = flagSet.Int("p", 3000, "Port to run on.")
+	mlFlag   = flagSet.Int("m", 120000, "Maximum lease time that will be handed out in milliseconds")
 )
 
 // Main func to get the system up and running.
-// Lots of hardcoded params that could do with being moved out.
 func main() {
-  port := 3000
-  var max_lease float64 = 120000 // Arbitrarily set it to 2 minutes (miiliseconds)
+	// Process flags
+	flagSet.Parse(os.Args[1:])
 
-  log.Println("LUS Server")
-  log.Println("Running on http://localhost:", port)
-  request_chan := lus.Start(max_lease)
+	var port int = *portFlag
+	var max_lease float64 = float64(*mlFlag)
 
-  http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { lus.Root_handler(port, w, r) })
-  http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) { lus.Register(request_chan, port, w, r) })
-  http.HandleFunc("/find", func(w http.ResponseWriter, r *http.Request) { lus.Find(request_chan, w, r) })
-  http.HandleFunc(lus.Entry_url(), func(w http.ResponseWriter, r *http.Request) { lus.Entry(request_chan, port, w, r) })
-  http.ListenAndServe(":"+strconv.Itoa(port), nil)
+	log.Println("LUS Server")
+	log.Println("Running on http://localhost:", port)
+	log.Println("Maxlease (ms):", max_lease)
+
+	request_chan := lus.Start(max_lease)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { lus.Root_handler(port, w, r) })
+	http.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) { lus.Register(request_chan, port, w, r) })
+	http.HandleFunc("/find", func(w http.ResponseWriter, r *http.Request) { lus.Find(request_chan, w, r) })
+	http.HandleFunc(lus.Entry_url(), func(w http.ResponseWriter, r *http.Request) { lus.Entry(request_chan, port, w, r) })
+	http.ListenAndServe(":"+strconv.Itoa(port), nil)
 }
