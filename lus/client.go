@@ -13,13 +13,16 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 type Client interface {
 	Register(keys map[string]string, lease int64, data string) Register_response
+	Autorenew(response Register_response)
 	Renew(url string, lease int64) Register_response
 	Find(keys map[string]string) []Entry_struct
 	Root_URL() string
+	Halt_renew(response Register_response)
 }
 
 // Internal struct that holds the details of the LUS client
@@ -27,6 +30,8 @@ type client_state struct {
 	root_url         string
 	registration_url string
 	find_url         string
+
+	renewals map[Register_response]chan bool
 }
 
 // Represents the JSON data struct that lets clients ask to extend a lease registration.
@@ -44,8 +49,41 @@ func NewClient(root_url string) *client_state {
 		root_url:         root_url,
 		registration_url: registration_url,
 		find_url:         find_url,
+
+		renewals: make(map[Register_response]chan bool),
 	}
 	return client
+}
+
+// Handle the automatic renewal of the supplied Register_response
+func (client client_state) Autorenew(response Register_response) {
+	stop_chan := make(chan bool)
+	m := client.renewals
+	m[response] = stop_chan
+	client.renewals = m
+	go func() {
+		r := response
+		for {
+			select {
+			case <-stop_chan:
+				return
+			default:
+				renew_freq := time.Duration(int64(r.Lease/2)) * time.Millisecond
+				time.Sleep(renew_freq)
+				r = client.Renew(r.Url, r.Lease)
+
+			}
+		}
+	}()
+}
+
+// Stop renewing a Register_response
+func (client client_state) Halt_renew(response Register_response) {
+	stop_chan, ok := client.renewals[response]
+	if ok {
+		delete(client.renewals, response)
+		stop_chan <- ok
+	}
 }
 
 // Gets the root url that defines this client.

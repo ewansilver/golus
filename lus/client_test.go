@@ -6,6 +6,7 @@ package lus
 
 import (
 	"testing"
+	"time"
 )
 
 func root_url() string { return "http://localhost:3000/" }
@@ -58,6 +59,33 @@ func TestClient(t *testing.T) {
 	// Finally we check that we have cleared everything out of the lus
 	f := client.Find(map[string]string{"application": "poller"})
 	assert_num_entries("f", f, 0)
+
+}
+
+func TestAutoRenewal(t *testing.T) {
+
+	var lease int64 = 1000
+
+	client := NewClient(root_url())
+
+	// First we need to make sure that the LUS is empty
+	a := client.Find(map[string]string{"application": "poller"})
+	assert_num_entries("a", a, 0)
+
+	b := client.Register(map[string]string{"application": "poller", "environment": "prod", "id": "b"}, lease, "")
+	client.Autorenew(b)
+	// Lets wait 5 seconds by which time the entry should have timed out. We want to make sure that it is still there and
+	// so show that it has been autorenewed
+	time.Sleep(2500 * time.Millisecond)
+
+	c := client.Find(map[string]string{"application": "poller"})
+	assert_num_entries("c", c, 1)
+
+	client.Halt_renew(b)
+	time.Sleep(1000 * time.Millisecond)
+
+	d := client.Find(map[string]string{"application": "poller"})
+	assert_num_entries("d", d, 0)
 
 }
 
