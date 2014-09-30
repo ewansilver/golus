@@ -18,7 +18,7 @@ import (
 
 type Client interface {
 	Register(keys map[string]string, lease int64, data string) Register_response
-	Autorenew(response Register_response)
+	Auto_renew(response Register_response)
 	Renew(url string, lease int64) Register_response
 	Find(keys map[string]string) []Entry_struct
 	Root_URL() string
@@ -56,7 +56,7 @@ func NewClient(root_url string) *client_state {
 }
 
 // Handle the automatic renewal of the supplied Register_response
-func (client client_state) Autorenew(response Register_response) {
+func (client client_state) Auto_renew(response Register_response) {
 	stop_chan := make(chan bool)
 	m := client.renewals
 	m[response] = stop_chan

@@ -11,6 +11,7 @@ import (
 
 func root_url() string { return "http://localhost:3000/" }
 
+// Test the range of client functions.
 func TestClient(t *testing.T) {
 	var lease int64 = 10000
 
@@ -62,10 +63,9 @@ func TestClient(t *testing.T) {
 
 }
 
+// Test that the auto renewal function works.
 func TestAutoRenewal(t *testing.T) {
-
 	var lease int64 = 1000
-
 	client := NewClient(root_url())
 
 	// First we need to make sure that the LUS is empty
@@ -73,20 +73,19 @@ func TestAutoRenewal(t *testing.T) {
 	assert_num_entries("a", a, 0)
 
 	b := client.Register(map[string]string{"application": "poller", "environment": "prod", "id": "b"}, lease, "")
-	client.Autorenew(b)
+	client.Auto_renew(b)
 	// Lets wait 5 seconds by which time the entry should have timed out. We want to make sure that it is still there and
 	// so show that it has been autorenewed
 	time.Sleep(2500 * time.Millisecond)
 
 	c := client.Find(map[string]string{"application": "poller"})
 	assert_num_entries("c", c, 1)
-
+	// Finally stop renew and check that everything dies out.
 	client.Halt_renew(b)
 	time.Sleep(1000 * time.Millisecond)
 
 	d := client.Find(map[string]string{"application": "poller"})
 	assert_num_entries("d", d, 0)
-
 }
 
 func assert_strings_match(a, b string) {
