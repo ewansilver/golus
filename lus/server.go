@@ -43,17 +43,10 @@ type LinkRelation struct {
 	Href string
 }
 
-// Represents the JSON data structure that is being passed over the wire to register a service.
-type Entry_struct struct {
-	Lease int64
-	Data  string
-	Keys  map[string]string
-}
-
-// Internal struct to allow us to track when a particular Entry_struct will expire.
+// Internal struct to allow us to track when a particular Service will expire.
 type entry_state struct {
-	expiry time.Time
-	entry  Entry_struct
+	expiry  time.Time
+	service Service
 }
 
 // A shitty internal structure that is overloaded with multiple use cases but represents the various inbound requests and means
@@ -61,7 +54,7 @@ type entry_state struct {
 type Request struct {
 	q                string
 	response_channel chan response
-	entry            Entry_struct
+	service          Service
 	id               string
 }
 
@@ -69,11 +62,11 @@ type Request struct {
 type response struct {
 	id      string
 	lease   int64
-	matches []Entry_struct
+	matches []Service
 }
 
 // Represents the JSON data struct that lets clients know that a service has been succesfully registered.
-type Register_response struct {
+type Registration struct {
 	Url   string
 	Lease int64
 }
@@ -99,29 +92,29 @@ func lus(c chan Request, max_lease float64) {
 		case req := <-c:
 			switch req.q {
 			case "register": // Handles registration of new services
-				id := create_unique_id(counter)
+				id := createUniqueID(counter)
 				counter++
-				expiry_time, lease_duration := get_expiry_and_lease(req.entry, max_lease)
-				entries[id] = entry_state{entry: req.entry, expiry: expiry_time}
+				expiry_time, lease_duration := getExpiryAndLease(req.service, max_lease)
+				entries[id] = entry_state{service: req.service, expiry: expiry_time}
 				req.response_channel <- response{id: id, lease: lease_duration}
 			case "renew": // Allows clients to renew service leases
 				id := req.id
 				e, ok := entries[id]
 				if ok {
-					expiry_time, lease_duration := get_expiry_and_lease(req.entry, max_lease)
-					entries[id] = entry_state{entry: e.entry, expiry: expiry_time}
+					expiry_time, lease_duration := getExpiryAndLease(req.service, max_lease)
+					entries[id] = entry_state{service: e.service, expiry: expiry_time}
 					req.response_channel <- response{id: id, lease: lease_duration}
 				} else {
 					req.response_channel <- response{} // Send an empty response to indicate nothing happened.
 				}
 			case "find": // Allows clients to find all the entries that match a particular set of keys.
-				req.response_channel <- response{matches: find_matching_entries(req.entry.Keys, entries)}
+				req.response_channel <- response{matches: findMatchingEntries(req.service.Keys, entries)}
 			case "get_id": // Allows a client to find the specific entry.
 				id := req.id
 				e, ok := entries[id]
 				if ok {
 					m := map[string]entry_state{"key": e}
-					r := response{matches: convert_to_entry_structs(m)}
+					r := response{matches: convertToServices(m)}
 					req.response_channel <- r
 				} else {
 					req.response_channel <- response{} // Send an empty response to indicate nothing happened.
@@ -131,29 +124,29 @@ func lus(c chan Request, max_lease float64) {
 				log.Println("**** stateful_routine DEFAULT. Shouldn't be here! :", req)
 			}
 		case <-tick_chan: // Cleans out stale entries.
-			entries = filterBy(remove_stale_entries_filter(), entries)
+			entries = filterBy(removeStaleEntries(), entries)
 		}
 	}
 }
 
 // Returns the new lease and the expiry time based on the requested_lease
-func get_expiry_and_lease(entry Entry_struct, max_lease float64) (time.Time, int64) {
+func getExpiryAndLease(entry Service, max_lease float64) (time.Time, int64) {
 	requested_lease := float64(entry.Lease)
 	lease_duration := time.Duration(math.Min(requested_lease, max_lease))
 	expiry_time := time.Now().Add(lease_duration * time.Millisecond)
-	return expiry_time, in_milliseconds(lease_duration * time.Millisecond)
+	return expiry_time, inMilliseconds(lease_duration * time.Millisecond)
 }
 
-// Find the Entry_structs that match the supplied templates
-func find_matching_entries(templates map[string]string, entries map[string]entry_state) []Entry_struct {
+// Find the Services that match the supplied templates
+func findMatchingEntries(templates map[string]string, entries map[string]entry_state) []Service {
 	for k, v := range templates {
-		entries = filterBy(matches_entry_state(k, v), entries)
+		entries = filterBy(matchesEntryState(k, v), entries)
 	}
-	return convert_to_entry_structs(entries)
+	return convertToServices(entries)
 }
 
 // Helper func that allows us to hack in a unique ID for every entry. Obviously this is deterministic but it is my first Go app so give me a break!
-func create_unique_id(counter int64) string {
+func createUniqueID(counter int64) string {
 	data := strconv.AppendInt([]byte("Some random stuff that isn't really random but will do for our purposes...."), counter, 10)
 	hasher := sha1.New()
 	hasher.Write(data)
@@ -161,27 +154,27 @@ func create_unique_id(counter int64) string {
 }
 
 //
-func convert_to_entry_structs(entries map[string]entry_state) []Entry_struct {
-	array := make([]Entry_struct, 0, len(entries))
+func convertToServices(entries map[string]entry_state) []Service {
+	array := make([]Service, 0, len(entries))
 	now := time.Now()
 
 	for _, entry := range entries {
 		expiry_time := entry.expiry
-		remaining_lease := in_milliseconds(expiry_time.Sub(now)) // Get the remaining lease in milliseconds
+		remaining_lease := inMilliseconds(expiry_time.Sub(now)) // Get the remaining lease in milliseconds
 		if remaining_lease > 0 {
-			array = append(array, Entry_struct{Lease: remaining_lease, Data: entry.entry.Data, Keys: entry.entry.Keys})
+			array = append(array, Service{Lease: remaining_lease, Data: entry.service.Data, Keys: entry.service.Keys, ID: entry.service.ID})
 		}
 	}
 	return array
 }
 
 // Get a Duration in milliseconds.
-func in_milliseconds(d time.Duration) int64 {
+func inMilliseconds(d time.Duration) int64 {
 	return d.Nanoseconds() / 1e6
 }
 
 // Remove any entries that have expired. Is passed into filterBy
-func remove_stale_entries_filter() func(e entry_state) bool {
+func removeStaleEntries() func(e entry_state) bool {
 	now := time.Now()
 	return func(e entry_state) bool {
 		is_alive := now.Before(e.expiry)
@@ -190,10 +183,10 @@ func remove_stale_entries_filter() func(e entry_state) bool {
 }
 
 // Finds all the entries that match the supplier key/value pair. Is passed into filterBy
-func matches_entry_state(key string, value string) func(e entry_state) bool {
+func matchesEntryState(key string, value string) func(e entry_state) bool {
 	return func(s entry_state) bool {
-		e := s.entry
-		v, ok := e.Keys[key]
+		service := s.service
+		v, ok := service.Keys[key]
 		if ok {
 			return v == value
 		}
@@ -212,30 +205,29 @@ func filterBy(filter func(e entry_state) bool, maps map[string]entry_state) map[
 	return response
 }
 
-// Extract the Entry_struct that was passed over the wire as JSON from the http.Request.
-func get_entry(b *http.Request) Entry_struct {
+// Extract the Service that was passed over the wire as JSON from the http.Request.
+func getService(b *http.Request) Service {
 	body, err := ioutil.ReadAll(b.Body)
 	if err != nil {
 		panic("l")
 	}
-	var entry Entry_struct
-	err = json.Unmarshal(body, &entry)
+	var s Service
+	err = json.Unmarshal(body, &s)
 	if err != nil {
 		panic(err)
 	}
-	return entry
+	return s
 }
 
 // The wrapper func that is called when clients want to register a new entry.
 func Register(request_channel chan Request, port int, w http.ResponseWriter, r *http.Request) {
-	entry := get_entry(r)
-
+	service := getService(r)
 	response_chan := make(chan response)
-	request_struct := Request{q: "register", response_channel: response_chan, entry: entry}
+	request_struct := Request{q: "register", response_channel: response_chan, service: service}
 	request_channel <- request_struct
 	response := <-response_chan
 
-	b, _ := json.Marshal(Register_response{Url: "http://localhost:" + strconv.Itoa(port) + Entry_url() + response.id, Lease: response.lease})
+	b, _ := json.Marshal(Registration{Url: "http://localhost:" + strconv.Itoa(port) + Entry_url() + response.id, Lease: response.lease})
 	w.Write(b)
 }
 
@@ -244,25 +236,19 @@ func Entry(request_channel chan Request, port int, w http.ResponseWriter, r *htt
 	if r.Method == "PUT" {
 		path := r.URL.Path
 		id := path[7:len(path)]
-		entry := get_entry(r)
 		response_chan := make(chan response)
-		request_struct := Request{q: "renew", response_channel: response_chan, entry: entry, id: id}
-		request_channel <- request_struct
+		request_channel <- Request{q: "renew", response_channel: response_chan, service: getService(r), id: id}
 		response := <-response_chan
-		b, _ := json.Marshal(Register_response{Url: "http://localhost:" + strconv.Itoa(port) + Entry_url() + response.id, Lease: response.lease})
+		b, _ := json.Marshal(Registration{Url: "http://localhost:" + strconv.Itoa(port) + Entry_url() + response.id, Lease: response.lease})
 		w.Write(b)
 	} else if r.Method == "GET" {
 		path := r.URL.Path
 		id := path[7:len(path)]
-
 		response_chan := make(chan response)
-		request_struct := Request{q: "get_id", response_channel: response_chan, id: id}
-		request_channel <- request_struct
+		request_channel <- Request{q: "get_id", response_channel: response_chan, id: id}
 		response := <-response_chan
-		matches := response.matches
-		b, _ := json.Marshal(matches)
+		b, _ := json.Marshal(response.matches)
 		w.Write(b)
-
 	} else {
 		panic("Wrong method")
 	}
@@ -270,14 +256,10 @@ func Entry(request_channel chan Request, port int, w http.ResponseWriter, r *htt
 
 // Wrapper func that is called to allow clients to find all Entries that match the supplied Entry JSON.
 func Find(request_channel chan Request, w http.ResponseWriter, r *http.Request) {
-	entry := get_entry(r)
-
 	response_chan := make(chan response)
-	request_struct := Request{q: "find", response_channel: response_chan, entry: entry}
-	request_channel <- request_struct
+	request_channel <- Request{q: "find", response_channel: response_chan, service: getService(r)}
 	response := <-response_chan
-	matches := response.matches
-	b, _ := json.Marshal(matches)
+	b, _ := json.Marshal(response.matches)
 	w.Write(b)
 }
 

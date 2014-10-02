@@ -18,14 +18,14 @@ import (
 func TestMaxLeaseUpdate(t *testing.T) {
 	var requested_lease int64 = 999999999
 	var max_lease float64 = 10000
-	_, lease := get_expiry_and_lease(Entry_struct{Lease: requested_lease}, max_lease)
+	_, lease := getExpiryAndLease(Service{Lease: requested_lease}, max_lease)
 	assert_int64(lease, int64(max_lease), t)
 }
 
 func TestRequestedLeaseUpdate(t *testing.T) {
 	var requested_lease int64 = 1000
 	var max_lease float64 = 100000
-	_, lease := get_expiry_and_lease(Entry_struct{Lease: requested_lease}, max_lease)
+	_, lease := getExpiryAndLease(Service{Lease: requested_lease}, max_lease)
 	assert_int64(lease, requested_lease, t)
 }
 
@@ -44,7 +44,7 @@ func assert_contains(key string, value string, m map[string]string) bool {
 	return true
 }
 
-func assert_num_entries(test string, entries []Entry_struct, num int) bool {
+func assert_num_entries(test string, entries []Service, num int) bool {
 	ok := num == len(entries)
 	log.Println("assert_num_entries:", ok)
 	if !ok {

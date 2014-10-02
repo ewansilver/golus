@@ -17,12 +17,12 @@ import (
 )
 
 type Client interface {
-	Register(keys map[string]string, lease int64, data string) Register_response
-	Auto_renew(response Register_response)
-	Renew(url string, lease int64) Register_response
-	Find(keys map[string]string) []Entry_struct
+	Register(service Service) Registration
+	Auto_renew(registration Registration)
+	Renew(url string, lease int64) Registration
+	Find(keys map[string]string) []Service
 	Root_URL() string
-	Halt_renew(response Register_response)
+	Halt_renew(registration Registration)
 }
 
 // Internal struct that holds the details of the LUS client
@@ -31,7 +31,7 @@ type client_state struct {
 	registration_url string
 	find_url         string
 
-	renewals map[Register_response]chan bool
+	renewals map[Registration]chan bool
 }
 
 // Represents the JSON data struct that lets clients ask to extend a lease registration.
@@ -50,19 +50,19 @@ func NewClient(root_url string) *client_state {
 		registration_url: registration_url,
 		find_url:         find_url,
 
-		renewals: make(map[Register_response]chan bool),
+		renewals: make(map[Registration]chan bool),
 	}
 	return client
 }
 
-// Handle the automatic renewal of the supplied Register_response
-func (client client_state) Auto_renew(response Register_response) {
+// Handle the automatic renewal of the supplied Registration
+func (client client_state) Auto_renew(registration Registration) {
 	stop_chan := make(chan bool)
 	m := client.renewals
-	m[response] = stop_chan
+	m[registration] = stop_chan
 	client.renewals = m
 	go func() {
-		r := response
+		r := registration
 		for {
 			select {
 			case <-stop_chan:
@@ -77,11 +77,11 @@ func (client client_state) Auto_renew(response Register_response) {
 	}()
 }
 
-// Stop renewing a Register_response
-func (client client_state) Halt_renew(response Register_response) {
-	stop_chan, ok := client.renewals[response]
+// Stop renewing a Registration
+func (client client_state) Halt_renew(registration Registration) {
+	stop_chan, ok := client.renewals[registration]
 	if ok {
-		delete(client.renewals, response)
+		delete(client.renewals, registration)
 		stop_chan <- ok
 	}
 }
@@ -91,66 +91,65 @@ func (c client_state) Root_URL() string {
 	return c.root_url
 }
 
-func get(url string) chan []Entry_struct {
-	response_channel := make(chan []Entry_struct)
+func get(url string) chan []Service {
+	response_channel := make(chan []Service)
 	go get_http(response_channel, url)
 	return response_channel
 }
 
 // Client interface to Renew with the LUS
-func (client client_state) Renew(url string, lease int64) Register_response {
+func (client client_state) Renew(url string, lease int64) Registration {
 	return <-renew_chan(url, lease)
 }
 
-func renew_chan(url string, lease int64) chan Register_response {
-	response_channel := make(chan Register_response)
+func renew_chan(url string, lease int64) chan Registration {
+	response_channel := make(chan Registration)
 	r := Renew_request{Lease: lease}
 	go renew_http(r, response_channel, url)
 	return response_channel
 }
 
 // Client interface to Register with the LUS
-func (client client_state) Register(keys map[string]string, lease int64, data string) Register_response {
-	return <-register_chan(keys, lease, data, client.registration_url)
+func (client client_state) Register(service Service) Registration {
+	return <-register_chan(service, client.registration_url)
 }
 
-func register_chan(keys map[string]string, lease int64, data string, url string) chan Register_response {
-	response_channel := make(chan Register_response)
-	e := Entry_struct{Keys: keys, Lease: lease, Data: data}
-	go register_http(e, response_channel, url)
+func register_chan(service Service, url string) chan Registration {
+	response_channel := make(chan Registration)
+	go register_http(service, response_channel, url)
 	return response_channel
 }
 
 // Client interface to Find matching templates
-func (client client_state) Find(keys map[string]string) []Entry_struct {
+func (client client_state) Find(keys map[string]string) []Service {
 	return <-find_chan(keys, client.find_url)
 }
 
-func find_chan(keys map[string]string, url string) chan []Entry_struct {
-	response_channel := make(chan []Entry_struct)
-	e := Entry_struct{Keys: keys}
+func find_chan(keys map[string]string, url string) chan []Service {
+	response_channel := make(chan []Service)
+	e := Service{Keys: keys}
 	go find_http(e, response_channel, url)
 	return response_channel
 }
 
-func get_http(response_channel chan []Entry_struct, url string) {
+func get_http(response_channel chan []Service, url string) {
 	body := get_to_server(url)
 	response_channel <- get_entries(body)
 }
 
-func renew_http(r Renew_request, response_channel chan Register_response, url string) {
+func renew_http(r Renew_request, response_channel chan Registration, url string) {
 	json, _ := json.Marshal(r)
 	body := json_to_server(bytes.NewBuffer(json), url, "PUT")
-	response_channel <- get_register_response(body)
+	response_channel <- get_Registration(body)
 }
 
-func register_http(e Entry_struct, response_channel chan Register_response, url string) {
-	json, _ := json.Marshal(e)
+func register_http(service Service, response_channel chan Registration, url string) {
+	json, _ := json.Marshal(service)
 	body := json_to_server(bytes.NewBuffer(json), url, "POST")
-	response_channel <- get_register_response(body)
+	response_channel <- get_Registration(body)
 }
 
-func find_http(e Entry_struct, response_channel chan []Entry_struct, url string) {
+func find_http(e Service, response_channel chan []Service, url string) {
 	json, _ := json.Marshal(e)
 	body := json_to_server(bytes.NewBuffer(json), url, "POST")
 	response_channel <- get_entries(body)
@@ -165,6 +164,7 @@ func get_hateoas(root_url string) (string, string) {
 	if lr[0].Rel == "http://rels.ewansilver.com/v1/lus/register" {
 		registration_url := lr[0].Href
 		find_url := lr[1].Href
+		return registration_url, find_url
 		return registration_url, find_url
 	} else {
 		registration_url := lr[1].Href
@@ -208,14 +208,14 @@ func json_to_server(json io.Reader, url string, method string) []byte {
 	return body
 }
 
-func get_register_response(body []byte) Register_response {
-	response := Register_response{}
+func get_Registration(body []byte) Registration {
+	response := Registration{}
 	json.Unmarshal(body, &response)
 	return response
 }
 
-func get_entries(body []byte) []Entry_struct {
-	entries := []Entry_struct{}
+func get_entries(body []byte) []Service {
+	entries := []Service{}
 	json.Unmarshal(body, &entries)
 	return entries
 }
